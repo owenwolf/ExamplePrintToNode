@@ -1,0 +1,92 @@
+<?php
+
+//use Drupal\Core\Form\FormStateInterface;
+//use Drupal\node\Entity\Node;
+//use Drupal\user\Entity\User;
+//use Drupal\Core\Routing\RouteMatchInterface;
+//use Symfony\Component\HttpFoundation\JsonResponse;
+//use Drupal\Core\Entity\EntityFormEditContext;
+//use Drupal\node\NodeForm;
+//use Drupal\node\NodeInterface;
+//use Drupal\Core\Entity\EntityInterface;
+//use Drupal\Core\Ajax\AjaxResponse;
+//use Drupal\Core\Ajax\HtmlCommand;
+//use Drupal\Core\Ajax\ReplaceCommand;
+//use Drupal\user\UserInterface;
+//use Drupal\Core\Session\AccountInterface;
+//use Drupal\Core\Entity\EntityInterface;
+
+use Drupal\Core\Form\FormStateInterface;
+use Drupal\Core\Ajax\AjaxResponse;
+use Drupal\Core\Ajax\HtmlCommand;
+use Drupal\user\Entity\User;
+use Drupal\Core\Render\Element;
+
+/**
+ * Implements hook_form_alter().
+ */
+function asignacion_de_impresora_usuarios_form_alter(array &$form, FormStateInterface $form_state, $form_id) {
+  // Alter the node add/edit form for the 'ticket_de_soporte' content type.
+  if ($form_id == 'node_ticket_de_soporte_form') {
+    $user = \Drupal::currentUser();
+    $uid = $user->id();
+    $account = User::load($uid);
+
+    // Get the 'field_impresoras_asignadas' field from the user profile.
+    $impresoras_asignadas = $account->get('field_impresoras_asignadas')->getValue();
+    $impresoras_asignadas_options = array_map(function($item) {
+      return $item['value'];
+    }, $impresoras_asignadas);
+
+    // Ensure the options are not empty.
+    if (!empty($impresoras_asignadas_options)) {
+      // Convert the 'field_impresoras_asignadas' field to a select list.
+      $form['field_impresoras_asignadas']['widget'][0]['value'] = [
+        '#type' => 'select',
+        '#title' => t('Impresoras Asignadas'),
+        '#options' => array_combine($impresoras_asignadas_options, $impresoras_asignadas_options),
+        '#default_value' => reset($impresoras_asignadas_options),
+        '#prefix' => '<div id="edit-field-impresoras-asignadas">',
+        '#suffix' => '</div>',
+      ];
+    }
+
+    // Attach an AJAX callback to update the 'impresoras_asignadas' field when the author is changed.
+    $form['uid']['widget'][0]['target_id']['#ajax'] = [
+      'callback' => 'asignacion_de_impresora_usuarios_update_impresoras_asignadas',
+      'event' => 'autocompleteclose',
+      'wrapper' => 'edit-field-impresoras-asignadas',
+    ];
+  }
+}
+
+/**
+ * AJAX callback to update the 'impresoras_asignadas' field based on the selected author.
+ */
+function asignacion_de_impresora_usuarios_update_impresoras_asignadas(array &$form, FormStateInterface $form_state) {
+  $uid = $form_state->getValue(['uid', 0, 'target_id']);
+  $account = User::load($uid);
+  $response = new AjaxResponse();
+
+  if ($account) {
+    // Get the 'impresoras_asignadas' field from the user profile.
+    $impresoras_asignadas = $account->get('field_impresoras_asignadas')->getValue();
+    $impresoras_asignadas_options = array_map(function($item) {
+      return $item['value'];
+    }, $impresoras_asignadas);
+
+    // Ensure the options are not empty.
+    if (!empty($impresoras_asignadas_options)) {
+      // Update the 'impresoras_asignadas' field in the node form.
+      $form['field_impresoras_asignadas']['widget'][0]['value']['#options'] = array_combine($impresoras_asignadas_options, $impresoras_asignadas_options);
+      $form['field_impresoras_asignadas']['widget'][0]['value']['#default_value'] = reset($impresoras_asignadas_options);
+
+      // Render the updated field and add the HtmlCommand to the response.
+      $form_state->setRebuild();
+      $field_rendered = \Drupal::service('renderer')->renderRoot($form['field_impresoras_asignadas']);
+      $response->addCommand(new HtmlCommand('#edit-field-impresoras-asignadas', $field_rendered));
+    }
+  }
+
+  return $response;
+}
