@@ -3,7 +3,6 @@
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Ajax\AjaxResponse;
 use Drupal\Core\Ajax\HtmlCommand;
-use Drupal\user\Entity\User;
 use Drupal\Core\Render\Element;
 
 /**
@@ -14,7 +13,7 @@ function asignacion_de_impresora_usuarios_form_alter(array &$form, FormStateInte
   if ($form_id == 'node_ticket_de_soporte_form') {
     $user = \Drupal::currentUser();
     $uid = $user->id();
-    $account = User::load($uid);
+    $account = \Drupal::entityTypeManager()->getStorage('user')->load($uid);
 
     // Get the 'field_impresoras_asignadas' field from the user profile.
     $impresoras_asignadas = $account->get('field_impresoras_asignadas')->getValue();
@@ -49,7 +48,7 @@ function asignacion_de_impresora_usuarios_form_alter(array &$form, FormStateInte
  */
 function asignacion_de_impresora_usuarios_update_impresoras_asignadas(array &$form, FormStateInterface $form_state) {
   $uid = $form_state->getValue(['uid', 0, 'target_id']);
-  $account = User::load($uid);
+  $account = \Drupal::entityTypeManager()->getStorage('user')->load($uid);
   $response = new AjaxResponse();
 
   if ($account) {
@@ -65,10 +64,10 @@ function asignacion_de_impresora_usuarios_update_impresoras_asignadas(array &$fo
       $form['field_impresoras_asignadas']['widget'][0]['value']['#options'] = array_combine($impresoras_asignadas_options, $impresoras_asignadas_options);
       $form['field_impresoras_asignadas']['widget'][0]['value']['#default_value'] = reset($impresoras_asignadas_options);
 
+      // Rebuild the entire form to ensure consistency
+      $form = \Drupal::formBuilder()->rebuildForm($form, $form_state);
       // Render the updated field and add the HtmlCommand to the response.
-      $form_state->setRebuild();
-      $field_rendered = \Drupal::service('renderer')->renderRoot($form['field_impresoras_asignadas']);
-      $response->addCommand(new HtmlCommand('#edit-field-impresoras-asignadas', $field_rendered));
+      $response->addCommand(new HtmlCommand('#edit-field-impresoras-asignadas', \Drupal::service('renderer')->render($form['field_impresoras_asignadas'])));
     }
   }
 
